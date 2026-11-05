@@ -25,16 +25,18 @@
             justify-content: center;
             align-items: center;
             height: 100vh;
+            width: 100vw;
             overflow: hidden;
             touch-action: manipulation;
         }
 
+        /* 鎖定固定尺寸，由 JavaScript 統一縮放 */
         #game-container {
             position: relative;
-            width: 100%;
-            max-width: 1000px;
-            height: 100vh;
-            max-height: 800px;
+            width: 1000px;
+            height: 800px;
+            flex-shrink: 0;
+            transform-origin: center center;
             background-color: var(--wood-dark);
             border-radius: 10px;
             border: 8px solid var(--brass);
@@ -189,10 +191,6 @@
             border-bottom: 2px solid var(--wood-dark); margin: 0;
         }
 
-        @media (max-width: 768px) {
-            .start-container { flex-direction: column; gap: 15px; max-height: 80vh; overflow-y: auto;}
-        }
-
         .hidden { display: none !important; }
 
         #boss-warning {
@@ -330,6 +328,18 @@
     </div>
 
     <script>
+        // --- 全螢幕等比例縮放引擎 ---
+        function scaleGameContainer() {
+            const container = document.getElementById('game-container');
+            if(!container) return;
+            // 以 1000x800 為基準，計算目前視窗可以放大的最大極限比例 (保證不被裁切)
+            const scale = Math.min(window.innerWidth / 1000, window.innerHeight / 800);
+            container.style.transform = `scale(${scale})`;
+        }
+        window.addEventListener('resize', scaleGameContainer);
+        document.addEventListener("DOMContentLoaded", scaleGameContainer);
+        scaleGameContainer(); // 啟動時立刻執行一次
+
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         const combatArea = document.getElementById('combat-area');
@@ -1380,8 +1390,6 @@
             });
             ctx.globalAlpha = 1.0;
         }
-
-        resizeCanvas();
 
         if (GAS_URL && !GAS_URL.includes('請把複製的網址貼在引號裡面')) {
             fetchLeaderboard('start-leaderboard-list');
