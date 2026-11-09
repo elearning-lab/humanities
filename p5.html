@@ -1,0 +1,1399 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>填充行軍(五年級)</title>
+    <style>
+        /* === 淺綠自然 風格 (Light Green / Forest Theme) === */
+        :root {
+            --wood-dark: #1b5e20;   /* 深綠色 (原深木紋，用於邊框與文字) */
+            --wood-light: #66bb6a;  /* 淺綠色 (原淺木紋，用於按鈕與裝飾) */
+            --parchment: #f1f8e9;   /* 極淺綠底色 (原羊皮紙色，用於面板底色) */
+            --brass: #fbc02d;       /* 金黃色 (原黃銅色，用於標題強調) */
+            --blood-red: #d32f2f;   /* 紅色 (用於扣血與錯誤提示) */
+            --health-green: #2e7d32;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+
+        body {
+            background-color: #c8e6c9; /* 淺綠色的螢幕背景底色 */
+            color: var(--wood-dark);
+            font-family: 'PMingLiU', '新細明體', serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            width: 100vw;
+            overflow: hidden;
+            touch-action: manipulation;
+        }
+
+        /* 鎖定固定尺寸，由 JavaScript 統一縮放 */
+        #game-container {
+            position: relative;
+            width: 1000px;
+            height: 800px;
+            flex-shrink: 0;
+            transform-origin: center center;
+            background-color: var(--wood-dark);
+            border-radius: 10px;
+            border: 8px solid var(--brass);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.6), inset 0 0 20px rgba(0,0,0,0.3);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* 戰鬥區域 */
+        #combat-area {
+            flex: none;
+            height: 280px; 
+            position: relative;
+            background-color: #000;
+        }
+
+        canvas { display: block; width: 100%; height: 100%; }
+        .ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+
+        /* 答題與控制區域 (改為淺綠色系) */
+        #control-panel {
+            flex: 1; 
+            display: flex; flex-direction: column; 
+            background-color: var(--parchment);
+            border-top: 6px solid var(--wood-light); 
+            box-shadow: inset 0 0 30px rgba(27, 94, 32, 0.15); 
+            z-index: 10;
+        }
+
+        /* 召喚按鈕區 */
+        #summon-section {
+            flex: none; padding: 10px 20px; display: flex; justify-content: center; align-items: center;
+            border-bottom: 4px dashed var(--wood-light); overflow-x: auto; 
+            background: rgba(102, 187, 106, 0.15); position: relative;
+        }
+
+        .summon-btn {
+            background: var(--wood-light); border: 3px solid var(--wood-dark); border-radius: 5px; 
+            color: #000; display: flex; flex-direction: column; align-items: center; justify-content: center;
+            padding: 0; width: 60px; height: 80px; cursor: pointer; position: relative;
+            transition: all 0.2s; box-shadow: 0 4px 0 var(--wood-dark); pointer-events: auto; overflow: hidden;
+        }
+
+        .summon-btn.disabled { filter: grayscale(80%); opacity: 0.7; cursor: not-allowed; }
+        .summon-btn:not(.disabled):hover { background: #4caf50; }
+        .summon-btn:not(.disabled):active { transform: translateY(4px); box-shadow: 0 0 0 var(--wood-dark); }
+
+        .summon-icon {
+            width: 100%; height: 100%; background-size: contain; background-position: center bottom;
+            background-repeat: no-repeat; position: absolute; top: 0; left: 0;
+        }
+
+        .summon-name {
+            position: absolute; bottom: 0; left: 0; width: 100%; font-size: 0.75rem; font-weight: bold;
+            background: rgba(200, 230, 201, 0.9); color: #000; text-align: center; padding: 2px 0; z-index: 2;
+        }
+
+        .summon-cost {
+            position: absolute; top: 2px; right: 2px; color: #000; background: var(--blood-red);
+            padding: 2px 4px; border-radius: 4px; font-size: 0.7rem; font-weight: bold; box-shadow: 0 1px 0 #8e0000; z-index: 2;
+        }
+
+        .mana-container {
+            position: absolute; right: 20px; top: 50%; transform: translateY(-50%); display: flex; align-items: center;
+            background: rgba(255,255,255,0.8); padding: 5px 15px; border-radius: 12px; border: 2px solid var(--brass);
+            box-shadow: 0 4px 0 var(--wood-light); font-size: 1.5rem; font-weight: bold; color: var(--wood-dark); white-space: nowrap;
+        }
+
+        #question-section {
+            flex: 1; padding: 40px 20px 20px 20px; pointer-events: auto; overflow-y: auto; text-align: center; line-height: 2.2;
+            display: flex; flex-direction: column; justify-content: flex-start;
+        }
+
+        .question-text-inline {
+            display: block; font-size: clamp(1.4rem, 4vw, 2.2rem); color: var(--wood-dark); font-weight: bold;
+            word-break: break-word; text-align: center;
+        }
+
+        .input-wrapper { display: inline-flex; align-items: center; margin: 0 5px; vertical-align: middle; }
+
+        #hint-display {
+            position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%);
+            text-align: center; font-size: 1rem; color: var(--blood-red); font-weight: bold; opacity: 0;
+            pointer-events: none; transition: opacity 0.3s; white-space: nowrap;
+            text-shadow: 1px 1px 0 #FFF, -1px -1px 0 #FFF, 1px -1px 0 #FFF, -1px 1px 0 #FFF;
+            line-height: 1; padding-bottom: 2px; letter-spacing: 0px; z-index: 10;
+        }
+
+        .inline-input {
+            font-size: inherit; padding: 2px 10px; border: none; border-bottom: 4px solid var(--wood-light);
+            background: rgba(255, 255, 255, 0.7); color: var(--blood-red); width: 160px; letter-spacing: 2px; 
+            text-align: center; outline: none; font-weight: bold; font-family: inherit;
+            border-radius: 5px 0 0 0; transition: all 0.2s; margin: 0; vertical-align: middle;
+        }
+
+        .submit-btn {
+            background: var(--health-green); border: none; border-radius: 0 5px 5px 0; color: #000;
+            font-size: 1.5rem; font-weight: bold; padding: 2px 15px; cursor: pointer;
+            transition: all 0.1s; margin: 0; font-family: inherit; vertical-align: middle; height: 100%;
+        }
+        .submit-btn:active { transform: translateY(2px); }
+
+        .overlay-screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(241, 248, 233, 0.95);
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            z-index: 100; backdrop-filter: blur(5px); pointer-events: auto; color: #000;
+        }
+
+        .overlay-screen h1 { font-size: 4rem; color: var(--wood-dark); text-shadow: 2px 2px 0 #FFF; margin-bottom: 20px; }
+        .overlay-screen p { font-size: 1.8rem; margin-bottom: 30px; text-align: center; font-weight: bold; }
+
+        #loading-msg {
+            font-size: 1.5rem; font-weight: bold; margin-bottom: 20px; color: var(--wood-dark); text-align: center;
+            padding: 10px 20px; background: rgba(241, 248, 233, 0.9); border-radius: 10px; border: 2px dashed var(--wood-light);
+        }
+
+        .start-btn {
+            background-color: var(--wood-light); color: #000; border: 2px solid var(--brass); padding: 15px 50px;
+            font-size: 1.8rem; font-weight: bold; border-radius: 8px; cursor: pointer; box-shadow: 0 6px 0 var(--wood-dark); 
+            transition: transform 0.2s, background-color 0.2s; font-family: inherit;
+        }
+        .start-btn:hover { background-color: #4caf50; }
+        .start-btn:active { transform: translateY(6px); box-shadow: 0 0 0 var(--wood-dark); }
+
+        /* 雙方框排版設計 */
+        .start-container {
+            display: flex; justify-content: center; align-items: stretch;
+            gap: 30px; width: 90%; max-width: 900px; margin: 20px auto;
+        }
+
+        .login-panel {
+            flex: 1; background: var(--parchment); border: 4px solid var(--wood-light); border-radius: 10px;
+            padding: 30px; box-shadow: 0 8px 16px rgba(0,0,0,0.3), inset 0 0 20px rgba(27, 94, 32, 0.15);
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+        }
+
+        .leaderboard-panel {
+            flex: 1; background: var(--parchment); border: 4px solid var(--wood-light); border-radius: 10px;
+            padding: 0; box-shadow: 0 8px 16px rgba(0,0,0,0.3), inset 0 0 20px rgba(27, 94, 32, 0.15);
+            display: flex; flex-direction: column; overflow: hidden; max-height: 450px;
+        }
+
+        .login-panel select, .login-panel input {
+            background-color: rgba(255,255,255,0.9); border: 2px solid var(--wood-light); font-family: inherit;
+            color: var(--wood-dark);
+        }
+
+        .leaderboard-title {
+            background: var(--wood-light); color: #000; padding: 15px; text-align: center; 
+            font-size: 1.5rem; font-weight: bold; position: sticky; top: 0; z-index: 10; 
+            border-bottom: 2px solid var(--wood-dark); margin: 0;
+        }
+
+        .hidden { display: none !important; }
+
+        #boss-warning {
+            position: absolute; top: 5%; left: 0; width: 100%; text-align: center; color: var(--blood-red);
+            font-size: 3rem; font-weight: bold; text-shadow: 3px 3px 0 #FFF, 0 0 20px #FFCDD2; pointer-events: none; opacity: 0; z-index: 200;
+            transform: scale(0.5); transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        #boss-warning.show { opacity: 1; transform: scale(1); animation: pulseWarning 0.5s infinite alternate; }
+
+        .boss-hp-container {
+            position: absolute; top: 5px; left: 50%; transform: translateX(-50%); width: 50%; height: 25px;
+            background: #FFF; border: 3px solid var(--blood-red); border-radius: 20px; display: none; box-shadow: 0 5px 15px rgba(0,0,0,0.2); overflow: hidden; z-index: 10;
+        }
+        .boss-hp-fill { height: 100%; background: linear-gradient(90deg, #EF5350, var(--blood-red)); width: 100%; transition: width 0.1s; }
+        .boss-hp-text {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; justify-content: center;
+            align-items: center; color: #000; font-weight: bold; font-size: 1rem; text-shadow: 1px 1px 2px white;
+        }
+        @keyframes pulseWarning { 0% { transform: scale(1); } 100% { transform: scale(1.1); color: #B71C1C;} }
+
+        .wave-announcement {
+            position: absolute; top: 15%; left: 0; width: 100%; text-align: center; font-size: 4rem; font-weight: bold; color: var(--brass);
+            text-shadow: 4px 4px 0 #000, 0 10px 20px rgba(0,0,0,0.3); pointer-events: none; opacity: 0; z-index: 300; transform: scale(0.5); transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        .wave-announcement.show { opacity: 1; transform: scale(1); }
+        
+        /* 頂部控制按鈕 */
+        #top-controls {
+            position: absolute; top: 10px; right: 10px; display: flex; gap: 10px; z-index: 500; pointer-events: auto;
+        }
+        .control-btn {
+            background: var(--wood-light); border: 2px solid var(--wood-dark); color: #000;
+            border-radius: 8px; width: 45px; height: 45px; font-size: 1.5rem; cursor: pointer;
+            display: flex; justify-content: center; align-items: center;
+            box-shadow: 0 4px 0 var(--wood-dark); transition: transform 0.1s, box-shadow 0.1s;
+        }
+        .control-btn:hover { background-color: #4caf50; }
+        .control-btn:active { transform: translateY(4px); box-shadow: 0 0 0 var(--wood-dark); }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        
+        <div id="top-controls">
+            <button id="mute-btn" class="control-btn" onclick="toggleMute()" title="靜音/取消靜音">🔇</button>
+            <button id="fullscreen-btn" class="control-btn" onclick="toggleFullscreen()" title="全螢幕">⛶</button>
+        </div>
+
+        <div id="start-screen" class="overlay-screen">
+            <h1 style="margin-bottom: 10px; font-size: 3.5rem; text-align: center;">填充行軍(五年級)</h1>
+            <p style="margin-bottom: 20px; font-size: 20px; text-align: center; color: #000; font-weight: bold;">答對題目獲得魔石，召喚戰士抵禦敵人！</p>
+            
+            <div class="start-container">
+                <!-- 左側：獨立登入方框 -->
+                <div class="login-panel">
+                    <div id="login-form" style="display: flex; flex-direction: column; gap: 15px; width: 100%; max-width: 300px;">
+                        <select id="login-class" style="padding: 12px; font-size: 1.2rem; border-radius: 5px; text-align: center; cursor: pointer; width: 100%; box-sizing: border-box;">
+                            <option value="" disabled selected>請選擇班別</option>
+                            <option value="5A">5A</option>
+                            <option value="5B">5B</option>
+                            <option value="5C">5C</option>
+                            <option value="5D">5D</option>
+                        </select>
+                        
+                        <select id="login-num" style="padding: 12px; font-size: 1.2rem; border-radius: 5px; text-align: center; cursor: pointer; width: 100%; box-sizing: border-box;">
+                            <option value="" disabled selected>請選擇班號</option>
+                            <script>
+                                for(let i = 1; i <= 35; i++) {
+                                    document.write(`<option value="${i}">${i}</option>`);
+                                }
+                            </script>
+                        </select>
+
+                        <input type="password" id="login-pass" placeholder="密碼 (例如: ss1234567)" style="padding: 12px; font-size: 1.2rem; border-radius: 5px; text-align: center; width: 100%; box-sizing: border-box;">
+                        
+                        <button onclick="attemptLogin()" class="start-btn" style="padding: 15px; font-size: 1.3rem; margin-top: 5px; width: 100%; border: none;">登入並載入任務</button>
+                        <p id="login-status" style="color: var(--blood-red); margin-top: 10px; text-align: center; font-weight: bold;"></p>
+                    </div>
+
+                    <div id="loading-msg" class="hidden" style="width: 100%;"></div>
+                    <button id="start-btn" class="start-btn hidden" onclick="startGame()" style="width: 100%; max-width: 300px; padding: 15px; font-size: 1.5rem; margin-top: 10px;">開始戰鬥</button>
+                </div>
+                
+                <!-- 右側：獨立龍虎榜方框 -->
+                <div class="leaderboard-panel">
+                    <div class="leaderboard-title">🏆 英雄龍虎榜 🏆</div>
+                    <div id="start-leaderboard-list" style="flex-grow: 1; overflow-y: auto;">
+                        <div style="text-align: center; padding: 60px 20px; color: var(--wood-light); font-size: 1.1rem; font-weight: bold;">
+                            📡 正在聯絡情報商...
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="game-over-screen" class="overlay-screen hidden">
+            <h1 id="end-title">防線崩潰</h1>
+            <p id="end-stats">你守住了 0 波，本次答對 0 題！</p>
+            
+            <div style="background: var(--parchment); border-radius: 10px; width: 90%; max-width: 600px; max-height: 300px; overflow-y: auto; margin-bottom: 20px; border: 4px solid var(--wood-light);">
+                <div class="leaderboard-title" style="position: sticky; top: 0; z-index: 10;">🏆 最終結算排名 🏆</div>
+                <div id="game-over-leaderboard-list">
+                    <div style="text-align: center; padding: 20px; color: var(--wood-dark); font-weight: bold;">正在結算並載入最新排名...</div>
+                </div>
+            </div>
+
+            <button class="start-btn" onclick="location.reload()">返回公會重新挑戰</button>
+        </div>
+
+        <div id="victory-screen" class="overlay-screen hidden">
+            <h1 style="color: var(--health-green); font-size: 5rem; text-shadow: 3px 3px 0 var(--wood-dark);">VICTORY</h1>
+            <p style="font-size: 2rem;">成功擊退敵人，取得階段勝利！</p>
+            <button class="start-btn" onclick="nextWave()">確認並繼續 ➔</button>
+        </div>
+
+        <!-- 戰鬥區域 -->
+        <div id="combat-area">
+            <canvas id="gameCanvas"></canvas>
+            <div class="ui-layer">
+                <div id="boss-hp-bar" class="boss-hp-container">
+                    <div id="boss-hp-fill" class="boss-hp-fill"></div>
+                    <div class="boss-hp-text"><span id="boss-name-display">Boss</span> &nbsp;<span id="boss-hp-text">1000/1000</span></div>
+                </div>
+                <div id="boss-warning">WARNING!<br><span style="font-size: 2rem;">強大生命體接近中</span></div>
+                <div id="wave-announcer" class="wave-announcement"></div>
+            </div>
+        </div>
+
+        <!-- 控制面板 -->
+        <div id="control-panel">
+            <div id="summon-section"></div>
+            <div id="question-section"></div>
+        </div>
+    </div>
+
+    <script>
+        // --- 全螢幕等比例縮放引擎 ---
+        function scaleGameContainer() {
+            const container = document.getElementById('game-container');
+            if(!container) return;
+            // 以 1000x800 為基準，計算目前視窗可以放大的最大極限比例 (保證不被裁切)
+            const scale = Math.min(window.innerWidth / 1000, window.innerHeight / 800);
+            container.style.transform = `scale(${scale})`;
+        }
+        window.addEventListener('resize', scaleGameContainer);
+        document.addEventListener("DOMContentLoaded", scaleGameContainer);
+        scaleGameContainer(); // 啟動時立刻執行一次
+
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const combatArea = document.getElementById('combat-area');
+
+        const startScreen = document.getElementById('start-screen');
+        const gameOverScreen = document.getElementById('game-over-screen');
+        const victoryScreen = document.getElementById('victory-screen'); 
+        const endStats = document.getElementById('end-stats');
+        const summonSection = document.getElementById('summon-section');
+        const loadingMsg = document.getElementById('loading-msg');
+        const startBtn = document.getElementById('start-btn');
+        
+        const bossWarning = document.getElementById('boss-warning');
+        const bossHpBarContainer = document.getElementById('boss-hp-bar');
+        const bossHpFill = document.getElementById('boss-hp-fill');
+        const bossHpText = document.getElementById('boss-hp-text');
+        const bossNameDisplay = document.getElementById('boss-name-display');
+
+        /* 音樂設定 */
+        const bgmAudio = new Audio('https://pmath-lab.github.io/2dbattle/bgm.mp3');
+        bgmAudio.loop = true; bgmAudio.volume = 0.8; 
+        const victoryAudio = new Audio('https://pmath-lab.github.io/2dbattle/victory2.mp3');
+        victoryAudio.volume = 0.8;
+
+        /* 預設靜音設定與控制邏輯 */
+        let isMuted = true;
+        bgmAudio.muted = true;
+        victoryAudio.muted = true;
+
+        function toggleMute() {
+            isMuted = !isMuted;
+            bgmAudio.muted = isMuted;
+            victoryAudio.muted = isMuted;
+            document.getElementById('mute-btn').innerText = isMuted ? '🔇' : '🔊';
+        }
+
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(err => {
+                    console.log(`無法進入全螢幕: ${err.message}`);
+                });
+            } else {
+                document.exitFullscreen();
+            }
+        }
+
+        let gameState = 'START';
+        let wave = 1;
+        let score = 0; // 紀錄「本次遊玩」的答對題數
+        let mana = 0;
+        const baseMaxHp = 500;
+        let baseHp = baseMaxHp;
+        
+        let enemyBaseMaxHp = 500;
+        let enemyBaseHp = enemyBaseMaxHp;
+        let isWaveClearing = false;
+        
+        let hasTriggered80 = false;
+        let hasTriggered40 = false;
+        
+        let wrongAttempts = 0;
+        let correctStreak = 0; // 連擊計數器
+        let currentQuestion = {};
+        let animationId;
+        let lastTime = 0;
+        
+        let entities = [];
+        let particles = [];
+        let projectiles = []; 
+        let effects = [];     
+        let auras = []; // 牧師光圈陣列
+        
+        let isBossWave = false;
+        let currentBoss = null;
+        let bossTriggered = false;
+        
+        let enemySpawnTimer = 0; // 小怪自動生成計時器
+        
+        let questionBank = []; 
+        let currentQuestionIndex = 0;
+        let currentStudent = null; 
+
+        // 您的 GAS API URL
+        const GAS_URL = 'https://script.google.com/macros/s/AKfycbyQ7LZ0fiQhjw5YBSo9Z5zy5Pv4zHvwWUufzLOXNKqtemSKEn6r2Jf40mhnk_CFL4RvOw/exec'; 
+
+        // 資源載入
+        let currentBgKey = 'bg1';
+        const loadedSprites = {};
+        const spriteData = {
+            'bg1': 'https://pmath-lab.github.io/2dbattle/bg1.jpg',
+            'bg2': 'https://pmath-lab.github.io/2dbattle/bg2.jpg',
+            'bg3': 'https://pmath-lab.github.io/2dbattle/bg3.jpg',
+            'bg4': 'https://pmath-lab.github.io/2dbattle/bg4.jpg',
+            'bg5': 'https://pmath-lab.github.io/2dbattle/bg5.jpg',
+            'castle_a': 'https://pmath-lab.github.io/2dbattle/castle_a.png',
+            'castle_b': 'https://pmath-lab.github.io/2dbattle/castle_b.png',
+            'swordsman': 'https://pmath-lab.github.io/2dbattle/so1.png',
+            'archer': 'https://pmath-lab.github.io/2dbattle/so2.png',
+            'cleric': 'https://pmath-lab.github.io/2dbattle/so3.png',
+            'defender': 'https://pmath-lab.github.io/2dbattle/so4.png',
+            'mage': 'https://pmath-lab.github.io/2dbattle/so5.png',
+            'mo1': 'https://pmath-lab.github.io/2dbattle/mo1.png',
+            'mo2': 'https://pmath-lab.github.io/2dbattle/mo2.png',
+            'bo2': 'https://pmath-lab.github.io/2dbattle/bo2.png',
+            'bo3': 'https://pmath-lab.github.io/2dbattle/bo3.png',
+            'bo4': 'https://pmath-lab.github.io/2dbattle/bo4.png',
+            'bo5': 'https://pmath-lab.github.io/2dbattle/bo5.png'
+        };
+        
+        for (const [key, url] of Object.entries(spriteData)) {
+            loadedSprites[key] = new Image();
+            loadedSprites[key].src = url;
+        }
+
+        // 參數設定
+        const INITIAL_CLASSES = {
+            'swordsman': { classKey: 'swordsman', name: '劍士', cost: 1, hp: 50, dmg: 10, range: 40, speed: 40, atkSpeed: 1500, color: '#e67e22', size: 1.0, isHealer: false, hasSprite: true },
+            'defender': { classKey: 'defender', name: '盾戰士', cost: 1, hp: 120, dmg: 0, range: 35, speed: 25, atkSpeed: 2250, color: '#7f8c8d', size: 1.1, isHealer: false, hasSprite: true }, 
+            'archer': { classKey: 'archer', name: '弓手', cost: 1, hp: 30, dmg: 12, range: 160, speed: 45, atkSpeed: 1575, color: '#27ae60', size: 0.9, isHealer: false, hasSprite: true, projType: 'arrow' },
+            'cleric': { classKey: 'cleric', name: '牧師', cost: 1, hp: 40, dmg: 15, range: 120, speed: 35, atkSpeed: 3000, color: '#f1c40f', size: 0.9, isHealer: true, hasSprite: true, projType: 'magic' }, 
+            'mage': { classKey: 'mage', name: '法師', cost: 1, hp: 35, dmg: 20, range: 130, speed: 30, atkSpeed: 2700, color: '#9b59b6', size: 1.0, isHealer: false, isAoE: true, aoeRadius: 80, hasSprite: true, projType: 'magic' }
+        };
+
+        let CLASSES = JSON.parse(JSON.stringify(INITIAL_CLASSES));
+
+        const ENEMY_TYPES = [
+            { name: '初級小怪', classKey: 'mo1', hp: 35, dmg: 6, range: 40, speed: 20, atkSpeed: 1650, color: '#2ecc71', size: 0.85, isBoss: false, hasSprite: true },
+            { name: '高級小怪', classKey: 'mo2', hp: 90, dmg: 14, range: 45, speed: 15, atkSpeed: 1950, color: '#e67e22', size: 1.15, isBoss: false, hasSprite: true }
+        ];
+        
+        const BOSS_DEFINITIONS = {
+            2: { classKey: 'mo2', name: '【魔物首領】', hp: 450, dmg: 18, range: 60, speed: 10, atkSpeed: 3300, color: '#e67e22', size: 2.2, isBoss: true, hasSprite: true },
+            3: { classKey: 'bo2', name: '【暗黑魔靈】', hp: 750, dmg: 26, range: 70, speed: 9, atkSpeed: 3600, color: '#8e44ad', size: 2.4, isBoss: true, hasSprite: true },
+            4: { classKey: 'bo3', name: '【深淵骷髏皇】', hp: 1100, dmg: 34, range: 80, speed: 8, atkSpeed: 3750, color: '#34495e', size: 2.6, isBoss: true, hasSprite: true },
+            5: { classKey: 'bo4', name: '【煉獄巨獸】', hp: 1500, dmg: 42, range: 85, speed: 7, atkSpeed: 4050, color: '#c0392b', size: 2.8, isBoss: true, hasSprite: true },
+            6: { classKey: 'bo5', name: '【毀滅魔神】', hp: 2000, dmg: 50, range: 90, speed: 6, atkSpeed: 4500, color: '#d35400', size: 3.0, isBoss: true, hasSprite: true }
+        };
+
+        function getBossConfig(currentWave) {
+            let baseConfig;
+            if (currentWave >= 2 && currentWave <= 6) { baseConfig = BOSS_DEFINITIONS[currentWave]; } 
+            else {
+                const waveKeys = [2, 3, 4, 5, 6];
+                const selectedKey = waveKeys[Math.floor(Math.random() * waveKeys.length)];
+                baseConfig = BOSS_DEFINITIONS[selectedKey];
+            }
+            const bossScale = 1 + (currentWave - 2) * 0.25;
+            return {
+                ...baseConfig, hp: Math.round(baseConfig.hp * bossScale), dmg: Math.round(baseConfig.dmg * (1 + (currentWave - 2) * 0.12)),
+                name: baseConfig.name + (currentWave > 6 ? ` Lv.${currentWave}` : '')
+            };
+        }
+
+        function resizeCanvas() { canvas.width = combatArea.clientWidth; canvas.height = combatArea.clientHeight; }
+        window.addEventListener('resize', resizeCanvas);
+
+        /* 擴散光圈類別 (牧師專用) */
+        class Aura {
+            constructor(x, y, team) {
+                this.x = x; this.y = y; this.team = team;
+                this.radius = 10; this.maxRadius = 150;
+                this.life = 1.0; this.active = true;
+                this.damagedEntities = new Set();
+            }
+            update(deltaTime) {
+                if (!this.active) return;
+                this.radius += (deltaTime / 1000) * 200; // 擴散速度
+                this.life -= deltaTime / 800; // 存活時間
+                if (this.life <= 0) { this.active = false; return; }
+
+                entities.forEach(e => {
+                    if (e.state !== 'dead' && !this.damagedEntities.has(e)) {
+                        let dist = Math.hypot(e.x - this.x, e.y - this.y);
+                        if (dist <= this.radius) {
+                            this.damagedEntities.add(e);
+                            if (e.team === this.team) {
+                                e.heal(3); // 友軍補 3 滴血
+                                effects.push(new Effect(e.x, e.y, 'magic_hit', '#2ecc71'));
+                            } else {
+                                e.takeDamage(1); // 敵軍扣 1 滴血
+                                effects.push(new Effect(e.x, e.y, 'hit', '#f1c40f'));
+                            }
+                        }
+                    }
+                });
+            }
+            draw(ctx) {
+                if (!this.active) return;
+                ctx.save();
+                ctx.globalAlpha = Math.max(0, this.life);
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.strokeStyle = '#f1c40f'; // 金色光圈
+                ctx.lineWidth = 3;
+                ctx.stroke();
+                ctx.fillStyle = 'rgba(241, 196, 15, 0.15)';
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        class Projectile {
+            constructor(x, y, target, dmg, type, color, team, isAoE, aoeRadius) {
+                this.x = x; this.y = y; this.target = target; this.dmg = dmg;
+                this.type = type; this.color = color; this.team = team;
+                this.speed = 500; this.active = true; this.isAoE = isAoE; this.aoeRadius = aoeRadius;
+            }
+            update(deltaTime) {
+                if (!this.active) return;
+                let targetX = (this.team === 0 ? canvas.width - 80 : 80);
+                let targetY = this.y;
+                
+                if (this.target) {
+                    if (this.target.isBase) {
+                        targetX = this.team === 0 ? canvas.width - 80 : 80;
+                        targetY = this.target.y; 
+                    } else if (this.target.state !== 'dead') {
+                        targetX = this.target.x; targetY = this.target.y - 20;
+                    }
+                }
+
+                let dx = targetX - this.x; let dy = targetY - this.y; let dist = Math.hypot(dx, dy);
+                if (dist < 15) { this.hit(); return; }
+                
+                let moveDist = this.speed * (deltaTime / 1000);
+                this.x += (dx / dist) * moveDist; this.y += (dy / dist) * moveDist;
+                
+                if(this.type === 'magic' && Math.random() > 0.3) createParticle(this.x, this.y, this.color);
+            }
+            hit() {
+                this.active = false;
+                if (this.target) {
+                    if (this.target.isBase) {
+                        if (this.team === 0) {
+                            if (enemyBaseHp > 0) {
+                                enemyBaseHp -= this.dmg;
+                                effects.push(new Effect(canvas.width - 80, this.y, 'hit', this.color));
+                                if (enemyBaseHp <= 0) { enemyBaseHp = 0; triggerBossArrivalOrWin(); }
+                            }
+                        } else {
+                            baseHp -= this.dmg;
+                            effects.push(new Effect(80, this.y, 'hit', this.color));
+                            checkBaseProtection(); 
+                            if (baseHp <= 0) gameOver();
+                        }
+                    } else if (this.target.state !== 'dead') {
+                        if (this.isAoE) {
+                            effects.push(new Effect(this.x, this.y, 'explosion', this.color));
+                            entities.forEach(e => {
+                                if (e.team !== this.team && e.state !== 'dead' && Math.hypot(e.x - this.x, e.y - this.y) <= this.aoeRadius) e.takeDamage(this.dmg);
+                            });
+                        } else {
+                            this.target.takeDamage(this.dmg);
+                            effects.push(new Effect(this.x, this.y, 'hit', this.color));
+                        }
+                    }
+                }
+            }
+            draw(ctx) {
+                if (!this.active) return;
+                ctx.save(); ctx.translate(this.x, this.y);
+                if (this.type === 'arrow') {
+                    let targetX = (this.team === 0 ? canvas.width - 80 : 80);
+                    let targetY = this.y;
+                    if (this.target) {
+                        if (this.target.isBase) { targetX = this.team === 0 ? canvas.width - 80 : 80; targetY = this.target.y; }
+                        else { targetX = this.target.x; targetY = this.target.y - 20; }
+                    }
+                    let angle = Math.atan2(targetY - this.y, targetX - this.x);
+                    ctx.rotate(angle); ctx.strokeStyle = '#1b5e20'; ctx.lineWidth = 2;
+                    ctx.beginPath(); ctx.moveTo(-10, 0); ctx.lineTo(10, 0); 
+                    ctx.moveTo(4, -4); ctx.lineTo(10, 0); ctx.lineTo(4, 4); ctx.stroke();
+                } else if (this.type === 'magic') {
+                    ctx.fillStyle = this.color; ctx.beginPath(); ctx.arc(0, 0, 7, 0, Math.PI*2); ctx.fill();
+                    ctx.shadowColor = this.color; ctx.shadowBlur = 10;
+                    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(0, 0, 3, 0, Math.PI*2); ctx.fill();
+                }
+                ctx.restore();
+            }
+        }
+
+        class Effect {
+            constructor(x, y, type, color, text = '') {
+                this.x = x; this.y = y; this.type = type; this.color = color; this.life = 1.0; 
+                this.text = text;
+            }
+            update(deltaTime) { 
+                if (this.type === 'floating_text') {
+                    this.y -= (deltaTime / 1000) * 30; // 向上飄動
+                    this.life -= deltaTime / 1500; // 存活時間
+                } else {
+                    this.life -= deltaTime / (this.type === 'slash' ? 200 : 400); 
+                }
+            }
+            draw(ctx) {
+                if (this.life <= 0) return;
+                ctx.save(); ctx.globalAlpha = this.life; ctx.translate(this.x, this.y);
+                if (this.type === 'slash') {
+                    ctx.strokeStyle = '#FFF'; ctx.lineWidth = 4;
+                    ctx.beginPath(); ctx.arc(0, -20, 25, -Math.PI*0.8, Math.PI*0.2 * this.life); ctx.stroke();
+                } else if (this.type === 'hit' || this.type === 'magic_hit') {
+                    ctx.fillStyle = this.color; ctx.beginPath(); ctx.arc(0, -20, 15 * (1-this.life), 0, Math.PI*2); ctx.fill();
+                } else if (this.type === 'explosion') {
+                    ctx.fillStyle = this.color; ctx.beginPath(); ctx.arc(0, -20, 40 * (1-this.life), 0, Math.PI*2); ctx.fill();
+                } else if (this.type === 'floating_text') {
+                    ctx.fillStyle = this.color; ctx.font = "bold 24px 'PMingLiU', '新細明體', serif";
+                    ctx.textAlign = 'center'; ctx.shadowColor = '#000'; ctx.shadowBlur = 4;
+                    ctx.fillText(this.text, 0, 0);
+                }
+                ctx.restore();
+            }
+        }
+
+        class Entity {
+            constructor(x, y, team, config) {
+                this.x = x; this.y = y; this.team = team; this.config = config;
+                this.maxHp = config.hp * (team === 1 ? (1 + (wave-1)*0.2) : 1); 
+                this.hp = this.maxHp; this.dmg = config.dmg * (team === 1 ? (1 + (wave-1)*0.1) : 1);
+                this.width = 30 * (config.size || 1); this.height = 40 * (config.size || 1);
+                this.range = config.range; this.speed = config.speed; this.atkSpeed = config.atkSpeed;
+                this.isHealer = config.isHealer || false; this.isBoss = config.isBoss || false;
+                this.state = 'walk'; this.attackTimer = 0; this.target = null;
+                this.color = config.color; this.shakeAmount = 0; this.stunTimer = 0;
+            }
+
+            drawSprite(ctx) {
+                if (!this.config.hasSprite || !loadedSprites[this.config.classKey]) return;
+                const img = loadedSprites[this.config.classKey];
+                if (img.complete && img.naturalWidth) {
+                    ctx.save();
+                    let drawW = this.width * 1.5; let drawH = drawW * (img.naturalHeight / img.naturalWidth);
+                    ctx.translate(0, -drawH / 2 + 10); ctx.drawImage(img, -drawW / 2, -drawH / 2, drawW, drawH);
+                    ctx.restore();
+                }
+            }
+            drawShapes(ctx) { ctx.fillStyle = this.color; ctx.fillRect(-this.width/2, -this.height, this.width, this.height); }
+
+            draw(ctx) {
+                if (this.state === 'dead') return;
+                let drawX = this.x; let drawY = this.y;
+                if (this.shakeAmount > 0) {
+                    drawX += (Math.random() - 0.5) * this.shakeAmount; drawY += (Math.random() - 0.5) * this.shakeAmount;
+                    this.shakeAmount -= 1;
+                }
+                if (this.state === 'attack' && this.attackTimer > this.atkSpeed - 250) {
+                    let progress = (this.atkSpeed - this.attackTimer) / 250;
+                    let bumpDist = Math.sin(progress * Math.PI) * 15;
+                    let dir = this.team === 0 ? 1 : -1;
+                    drawX += bumpDist * dir;
+                }
+
+                ctx.save(); ctx.translate(drawX, drawY);
+                if (this.state === 'walk') { let stretch = Math.sin(Date.now() * 0.01) * 0.05; ctx.scale(1 - stretch, 1 + stretch); }
+                
+                if (this.isBoss && this.state !== 'dead') {
+                    ctx.beginPath(); ctx.ellipse(0, 0, this.width, 15, 0, 0, Math.PI*2);
+                    ctx.fillStyle = 'rgba(255, 0, 0, 0.3)'; ctx.fill(); ctx.shadowColor = '#ff0000'; ctx.shadowBlur = 20;
+                }
+                ctx.fillStyle = 'rgba(0,0,0,0.4)'; ctx.beginPath(); ctx.ellipse(0, 0, this.width/1.5, 8, 0, 0, Math.PI*2); ctx.fill();
+                if (this.config.hasSprite) this.drawSprite(ctx); else this.drawShapes(ctx);
+                if(this.isBoss) ctx.shadowBlur = 0;
+
+                if (!this.isBoss) {
+                    const hpPercent = this.hp / this.maxHp;
+                    ctx.fillStyle = '#000'; ctx.fillRect(-this.width/2, -this.height - 15, this.width, 5);
+                    ctx.fillStyle = hpPercent > 0.5 ? '#2ecc71' : (hpPercent > 0.2 ? '#f1c40f' : '#e74c3c');
+                    ctx.fillRect(-this.width/2, -this.height - 15, this.width * hpPercent, 5);
+                }
+                
+                if (this.stunTimer > 0) { ctx.fillStyle = '#f1c40f'; ctx.font = 'bold 16px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('💫暈眩中', 0, -this.height - 25); }
+                ctx.restore();
+            }
+            
+            update(deltaTime) {
+                if (this.state === 'dead') return;
+                if (this.stunTimer > 0) { this.stunTimer -= deltaTime; return; }
+                if (this.attackTimer > 0) this.attackTimer -= deltaTime;
+
+                this.findTarget();
+
+                if (this.target) {
+                    let targetX = this.target.isBase ? (this.team === 0 ? canvas.width - 80 : 80) : this.target.x;
+                    
+                    // 改為純粹計算 X 軸的水平距離
+                    let dx = targetX - this.x; 
+                    let dist = Math.abs(dx);
+
+                    if (dist <= this.range) {
+                        if (this.state !== 'attack') this.state = 'attack';
+                        if (this.attackTimer <= 0) this.performAttack();
+                    } else {
+                        if (this.state !== 'walk') this.state = 'walk';
+                        
+                        // 只在 X 軸移動，移除 Y 軸追蹤，讓角色待在自己的跑道上
+                        let moveDist = this.speed * (deltaTime / 1000);
+                        let moveX = (dx > 0 ? 1 : -1) * moveDist;
+                        
+                        this.x = Math.max(80, Math.min(canvas.width - 80, this.x + moveX));
+                    }
+                } else { this.state = 'walk'; }
+            }
+
+            findTarget() {
+                // 每次都重新尋找場上存活且非同隊的目標
+                let enemies = entities.filter(e => e.team !== this.team && e.state !== 'dead');
+                let closestDist = Infinity;
+                let newTarget = null;
+                
+                // 找出 X 軸距離自己最近的敵人
+                enemies.forEach(enemy => {
+                    let dist = Math.abs(enemy.x - this.x); 
+                    if (dist < closestDist) { closestDist = dist; newTarget = enemy; }
+                });
+                
+                // 如果有找到最近的敵人，就鎖定他；否則鎖定主堡
+                if (newTarget) {
+                    this.target = newTarget;
+                } else {
+                    let targetBaseHp = this.team === 0 ? enemyBaseHp : baseHp;
+                    if (targetBaseHp > 0) {
+                        this.target = { isBase: true, x: this.team === 0 ? canvas.width - 80 : 80, y: this.y, state: 'alive' };
+                    } else {
+                        this.target = null;
+                    }
+                }
+            }
+
+            performAttack() {
+                this.attackTimer = this.atkSpeed;
+                if (this.isHealer) {
+                    // 牧師改為產生擴散光圈
+                    auras.push(new Aura(this.x, this.y - this.height/2, this.team));
+                    effects.push(new Effect(this.x, this.y - this.height/2, 'magic_hit', '#f1c40f'));
+                } else if (this.config.classKey === 'defender') {
+                    if (!this.target.isBase) {
+                        effects.push(new Effect(this.target.x, this.target.y, 'slash', '#fff'));
+                        let pushDist = this.target.isBoss ? 15 : 45; let dir = this.team === 0 ? 1 : -1;
+                        this.target.x += pushDist * dir; this.target.x = Math.max(80, Math.min(canvas.width - 80, this.target.x));
+                    }
+                } else if (this.isBoss) {
+                    if (this.target.isBase) {
+                        baseHp -= this.dmg; effects.push(new Effect(80, this.y - this.height/2, 'slash', '#e74c3c'));
+                        checkBaseProtection(); if (baseHp <= 0) gameOver();
+                    } else {
+                        effects.push(new Effect(this.target.x, this.target.y, 'slash', this.color));
+                        this.target.takeDamage(this.dmg);
+                        let possibleTargets = entities.filter(e => e.team !== this.team && e.state !== 'dead' && e !== this.target && Math.hypot(e.x - this.x, e.y - this.y) <= this.range + 30);
+                        possibleTargets.sort((a,b) => Math.hypot(a.x - this.x, a.y - this.y) - Math.hypot(b.x - this.x, b.y - this.y));
+                        let extraHits = Math.min(2, possibleTargets.length);
+                        for(let i=0; i<extraHits; i++) {
+                            possibleTargets[i].takeDamage(this.dmg); effects.push(new Effect(possibleTargets[i].x, possibleTargets[i].y, 'slash', this.color));
+                        }
+                    }
+                } else if (this.config.classKey === 'archer') {
+                    let rand = Math.random(); let arrows = 1; if (rand < 0.10) arrows = 3; else if (rand < 0.50) arrows = 2; 
+                    for(let i=0; i<arrows; i++) {
+                        let offsetY = (i - (arrows-1)/2) * 15;
+                        projectiles.push(new Projectile(this.x, this.y - this.height/2 + offsetY, this.target, this.dmg, this.config.projType, this.color, this.team, this.config.isAoE, this.config.aoeRadius));
+                    }
+                } else if (this.config.projType) {
+                    projectiles.push(new Projectile(this.x, this.y - this.height/2, this.target, this.dmg, this.config.projType, this.color, this.team, this.config.isAoE, this.config.aoeRadius));
+                } else if (this.config.isAoE) {
+                    if (!this.target.isBase) {
+                        effects.push(new Effect(this.target.x, this.target.y, 'slash', this.color));
+                        let targetX = this.target.x; let targetY = this.target.y;
+                        entities.forEach(e => {
+                            if (e.team !== this.team && e.state !== 'dead' && Math.hypot(e.x - targetX, e.y - targetY) <= this.config.aoeRadius) e.takeDamage(this.dmg);
+                        });
+                    }
+                } else {
+                    if (this.target.isBase) {
+                        if (this.team === 0) {
+                            if (enemyBaseHp > 0) {
+                                enemyBaseHp -= this.dmg; effects.push(new Effect(canvas.width - 80, this.y - this.height/2, 'slash', '#3498db')); 
+                                if (enemyBaseHp <= 0) { enemyBaseHp = 0; triggerBossArrivalOrWin(); }
+                            }
+                        } else {
+                            baseHp -= this.dmg; effects.push(new Effect(80, this.y - this.height/2, 'slash', '#e74c3c'));
+                            checkBaseProtection(); if (baseHp <= 0) gameOver();
+                        }
+                    } else {
+                        this.target.takeDamage(this.dmg); effects.push(new Effect(this.target.x, this.target.y, 'slash', '#fff'));
+                    }
+                }
+            }
+
+            takeDamage(amount) {
+                if (this.state === 'dead' || amount <= 0) return;
+                this.hp -= amount; this.shakeAmount = 15; 
+                if (this.isBoss) updateBossUI();
+                if (this.hp <= 0) this.die();
+            }
+            heal(amount) { if (this.state === 'dead') return; this.hp = Math.min(this.maxHp, this.hp + amount); }
+            die() {
+                this.hp = 0; this.state = 'dead';
+                if (this.isBoss) {
+                    createParticleExplosion(this.x, this.y, '#ff0000', 50); bossHpBarContainer.style.display = 'none';
+                    currentBoss = null; setTimeout(() => triggerWaveClear(), 1500);
+                } else { 
+                    createParticleExplosion(this.x, this.y, '#95a5a6', 10); 
+                    // 5% 機率掉落魔石特效
+                    if (this.team === 1 && Math.random() < 0.05) {
+                        addMana(1);
+                        effects.push(new Effect(this.x, this.y - 30, 'floating_text', '#f1c40f', '+1 💎'));
+                    }
+                }
+            }
+        }
+
+        function checkBaseProtection() {
+            let hpPercent = baseHp / baseMaxHp;
+            if (hpPercent <= 0.8 && !hasTriggered80) { hasTriggered80 = true; triggerPlayerProtection(); }
+            if (hpPercent <= 0.4 && !hasTriggered40) { hasTriggered40 = true; triggerPlayerProtection(); }
+        }
+        function triggerPlayerProtection() {
+            const announcer = document.getElementById('wave-announcer');
+            announcer.innerText = '🛡️ 主堡防衛系統啟動！'; announcer.style.color = '#4FC3F7';
+            announcer.classList.add('show'); setTimeout(() => announcer.classList.remove('show'), 2000);
+            entities.forEach(e => {
+                if (e.team === 1 && e.state !== 'dead') {
+                    if (e.isBoss) { e.x = canvas.width / 2; e.stunTimer = 20000; createParticleExplosion(e.x, e.y, '#3498db', 30); } 
+                    else { e.die(); }
+                }
+            });
+        }
+
+        function createParticle(x, y, color) { particles.push({ x: x, y: y, vx: (Math.random() - 0.5) * 10, vy: (Math.random() - 0.5) * 10, life: 1.0, color: color }); }
+        function createParticleExplosion(x, y, color, count = 10) { for(let i=0; i<count; i++) createParticle(x, y + (Math.random()*20 - 10), color); }
+
+        async function attemptLogin() {
+            const loginStatus = document.getElementById('login-status');
+            if (loginStatus) loginStatus.innerText = ""; // 重設提示
+
+            if (!GAS_URL || GAS_URL.includes('請把複製的網址貼在引號裡面')) {
+                if (loginStatus) loginStatus.innerText = "未設定 GAS 網址！"; return;
+            }
+            
+            const classVal = document.getElementById('login-class').value.trim();
+            const numVal = document.getElementById('login-num').value.trim();
+            const passVal = document.getElementById('login-pass').value.trim();
+            
+            if (!classVal || !numVal || !passVal) {
+                if (loginStatus) loginStatus.innerText = "請填寫班別、班號與密碼！"; return;
+            }
+
+            const loginForm = document.getElementById('login-form');
+            loginForm.classList.add('hidden');
+            loadingMsg.classList.remove('hidden');
+            loadingMsg.innerHTML = `📜 正在查閱公會名冊...`;
+
+            try {
+                const urlWithParams = `${GAS_URL}?class=${encodeURIComponent(classVal)}&num=${encodeURIComponent(numVal)}&pass=${encodeURIComponent(passVal)}`;
+                const response = await fetch(urlWithParams);
+                if (!response.ok) throw new Error(`伺服器回應錯誤`);
+                const textData = await response.text();
+                if (textData.includes('<!DOCTYPE html>')) throw new Error("權限錯誤或網址設定錯誤。");
+                
+                let data = JSON.parse(textData);
+                
+                if (data.error) {
+                    throw new Error(data.error); 
+                } else if (data.success && data.questions && data.questions.length > 0) {
+                    currentStudent = { class: classVal, num: numVal }; 
+                    questionBank = data.questions.sort(() => Math.random() - 0.5); 
+                    
+                    loadingMsg.innerHTML = `
+                        <span style="color: #2e7d32;">✅ 歡迎歸來，${data.name}！<br>遠征任務已備妥 (${questionBank.length}題)</span>
+                        <div id="my-rank-display" style="margin-top: 15px; padding-top: 15px; border-top: 2px dashed #388e3c; color: #1b5e20; font-size: 1.3rem;">目前排名: 查閱中...</div>
+                    `;
+                    startBtn.classList.remove('hidden');
+                    fetchMyRank();
+                } else { 
+                    throw new Error("題庫為空或資料格式不正確。"); 
+                }
+            } catch (error) { 
+                loadingMsg.innerHTML = `<span style="color: #d32f2f;">❌ 驗證失敗：${error.message}</span>`; 
+                setTimeout(() => {
+                    loadingMsg.classList.add('hidden');
+                    loginForm.classList.remove('hidden');
+                }, 3000); 
+            }
+        }
+
+        async function fetchMyRank() {
+            if (!currentStudent || !GAS_URL) return;
+            const rankDisplay = document.getElementById('my-rank-display');
+            if (!rankDisplay) return;
+            try {
+                const url = `${GAS_URL}?action=getLeaderboard&class=${encodeURIComponent(currentStudent.class)}&num=${encodeURIComponent(currentStudent.num)}`;
+                const response = await fetch(url);
+                const data = await response.json();
+                if (data.success) {
+                    let rankText = data.myRank > 0 ? data.myRank : "-";
+                    let scoreText = data.myData ? data.myData.score : 0;
+                    rankDisplay.innerHTML = `公會排名: <span style="color: #d32f2f; font-size: 1.6rem; font-weight: bold;">${rankText}</span> &nbsp;<span style="font-size: 1rem; color: #388e3c;">(累積討伐 ${scoreText} 題)</span>`;
+                } else { rankDisplay.innerHTML = `公會排名: 情報中斷`; }
+            } catch(e) { rankDisplay.innerHTML = `公會排名: 連線錯誤`; }
+        }
+
+        async function fetchLeaderboard(targetId = 'start-leaderboard-list') {
+            const lbContainer = document.getElementById(targetId);
+            if (!lbContainer) return;
+            lbContainer.innerHTML = '<div style="text-align: center; padding: 40px 20px; color: #1b5e20; font-size: 1.1rem; font-weight: bold;">📜 正在聯絡情報商...</div>';
+
+            try {
+                let url = `${GAS_URL}?action=getLeaderboard`;
+                if (currentStudent) url += `&class=${encodeURIComponent(currentStudent.class)}&num=${encodeURIComponent(currentStudent.num)}`;
+                
+                const response = await fetch(url);
+                const data = await response.json();
+
+                if (data.success && data.top15) renderLeaderboard(data.top15, data.myRank, data.myData, lbContainer);
+                else lbContainer.innerHTML = '<div style="text-align: center; color: #d32f2f; padding: 20px; font-weight: bold;">無法取得公會情報。</div>';
+            } catch (err) {
+                lbContainer.innerHTML = '<div style="text-align: center; color: #d32f2f; padding: 20px; font-weight: bold;">連線逾時，榜單載入失敗。</div>';
+            }
+        }
+
+        function renderLeaderboard(top15, myRank, myData, container) {
+            let html = `
+            <table style="width: 100%; border-collapse: collapse; text-align: center; font-weight: bold; font-size: 1rem;">
+                <thead style="background: #66bb6a; color: #000; position: sticky; top: 0; z-index: 5;">
+                    <tr><th style="padding: 10px;">排名</th><th style="padding: 10px;">班別</th><th style="padding: 10px;">姓名</th><th style="padding: 10px;">答對題數</th></tr>
+                </thead><tbody style="color: #1b5e20;">
+            `;
+
+            top15.forEach((player, index) => {
+                let rankIcon = (index === 0) ? '🥇' : (index === 1) ? '🥈' : (index === 2) ? '🥉' : (index + 1);
+                let rowStyle = (index % 2 === 0) ? 'background: rgba(0,0,0,0.05);' : 'background: transparent;';
+                if (currentStudent && player.cls === currentStudent.class && player.num === currentStudent.num) {
+                    rowStyle = 'background: #c8e6c9; color: #1b5e20; font-size: 1.05em; border-top: 2px solid #388e3c; border-bottom: 2px solid #388e3c; box-shadow: inset 0 0 10px rgba(56, 142, 60, 0.3);';
+                }
+                html += `
+                    <tr style="${rowStyle} border-bottom: 1px solid #a5d6a7;">
+                        <td style="padding: 8px;">${rankIcon}</td><td style="padding: 8px;">${player.cls}</td>
+                        <td style="padding: 8px;">${player.name}</td><td style="padding: 8px; color: #d32f2f;">${player.score}</td>
+                    </tr>
+                `;
+            });
+
+            if (myRank > 15 && myData) {
+                html += `
+                    <tr style="background: #a5d6a7; color: #000; border-top: 4px solid #1b5e20; font-size: 1.05em;">
+                        <td style="padding: 10px;">${myRank}</td><td style="padding: 10px;">${myData.cls}</td>
+                        <td style="padding: 10px;">${myData.name}</td><td style="padding: 10px; color: #d32f2f;">${myData.score}</td>
+                    </tr>
+                `;
+            } else if (myRank === -1 && currentStudent) {
+                html += `
+                    <tr style="background: rgba(0,0,0,0.1); color: #388e3c; border-top: 3px solid #81c784;">
+                        <td style="padding: 10px;">-</td><td style="padding: 10px;">${currentStudent.class}</td>
+                        <td style="padding: 10px;">(尚未有紀錄)</td><td style="padding: 10px;">0</td>
+                    </tr>
+                `;
+            }
+
+            html += `</tbody></table>`; container.innerHTML = html;
+        }
+
+        function getAvailableClassKeys(currentWave) {
+            let availableKeys = [];
+            if (currentWave >= 1) availableKeys.push('swordsman');
+            if (currentWave >= 2) availableKeys.push('defender', 'archer');
+            if (currentWave >= 3) availableKeys.push('cleric');
+            if (currentWave >= 4) availableKeys = Object.keys(CLASSES); 
+            return availableKeys;
+        }
+
+        function generateQuestion() {
+            const answerInput = document.getElementById('answer-input');
+            if(answerInput) answerInput.value = "";
+            wrongAttempts = 0;
+            if (questionBank.length > 0) {
+                if (currentQuestionIndex >= questionBank.length) { currentQuestionIndex = 0; questionBank.sort(() => Math.random() - 0.5); }
+                let qData = questionBank[currentQuestionIndex];
+                currentQuestion = { id: qData.id, text: qData.q, answer: String(qData.a).trim() }; 
+                currentQuestionIndex++; updateQuestionUI();
+            }
+        }
+
+        function updateQuestionUI() {
+            const questionSection = document.getElementById('question-section');
+            questionSection.innerHTML = '';
+            if (!currentQuestion || !currentQuestion.text) return;
+
+            let qText = currentQuestion.text;
+            let parts = qText.split(/（）|\(\)|_+/g);
+            if (parts.length === 1) parts = [qText, ''];
+            
+            const p = document.createElement('div'); p.className = 'question-text-inline';
+            p.appendChild(document.createTextNode(parts[0]));
+
+            const inputWrapper = document.createElement('span'); inputWrapper.className = 'input-wrapper';
+            const inputInnerWrap = document.createElement('span');
+            inputInnerWrap.style.position = 'relative'; inputInnerWrap.style.display = 'inline-block';
+
+            const hintDiv = document.createElement('div'); hintDiv.id = 'hint-display';
+            
+            const input = document.createElement('input');
+            input.type = 'text'; input.id = 'answer-input'; input.className = 'inline-input';
+            input.autocomplete = 'off';
+            input.onkeypress = (e) => { if (e.key === 'Enter') submitAnswer(); };
+
+            inputInnerWrap.appendChild(hintDiv); inputInnerWrap.appendChild(input);
+
+            const btn = document.createElement('button');
+            btn.id = 'submit-btn'; btn.className = 'submit-btn'; btn.innerText = '➔'; btn.onclick = submitAnswer;
+
+            inputWrapper.appendChild(inputInnerWrap); inputWrapper.appendChild(btn);
+            
+            p.appendChild(inputWrapper);
+            if (parts.length > 1 && parts[parts.length - 1] !== '') { p.appendChild(document.createTextNode(parts[parts.length - 1])); }
+            
+            questionSection.appendChild(p);
+            setTimeout(() => input.focus(), 100);
+        }
+
+        function submitAnswer() {
+            if (gameState !== 'PLAYING') return;
+            const answerInput = document.getElementById('answer-input');
+            const submitBtn = document.getElementById('submit-btn');
+            if (!answerInput) return;
+
+            const playerAnswer = answerInput.value.trim();
+            if (playerAnswer === "") return;
+
+            if (playerAnswer.toLowerCase() === 'baralaichow') {
+                addMana(99); answerInput.value = ''; 
+                const hintDisplay = document.getElementById('hint-display');
+                if (hintDisplay) {
+                    hintDisplay.innerText = '⚡ 開發者模式：+99 魔石 ⚡'; hintDisplay.style.color = '#fbc02d'; hintDisplay.style.opacity = '1';
+                    setTimeout(() => { if (hintDisplay.innerText.includes('開發者模式')) hintDisplay.style.opacity = '0'; }, 2000);
+                }
+                return;
+            }
+
+            const isCorrect = playerAnswer.toLowerCase() === currentQuestion.answer.trim().toLowerCase();
+
+            if (isCorrect) {
+                score++; 
+                let manaReward = 1;
+                let comboMsg = "";
+                let delay = 300;
+
+                // 如果完全沒答錯就一發命中，計入連擊
+                if (wrongAttempts === 0) {
+                    correctStreak++;
+                    if (correctStreak >= 2) {
+                        manaReward = 2; // 連擊給 2 顆魔石
+                        comboMsg = `🔥 ${correctStreak} 連擊！+2 💎 🔥`;
+                        delay = 1000; // 延長換題時間，讓學生看見連擊提示
+                    }
+                } else {
+                    correctStreak = 0; // 只要有答錯過一次，連擊就中斷
+                }
+
+                addMana(manaReward); 
+                logQuestionRecord(currentQuestion.id, wrongAttempts, score); 
+
+                answerInput.style.color = '#388E3C'; answerInput.style.borderBottomColor = '#4CAF50'; answerInput.style.backgroundColor = '#E8F5E9';
+                const hintDisplay = document.getElementById('hint-display');
+                if (hintDisplay) {
+                    if (comboMsg) {
+                        hintDisplay.innerText = comboMsg;
+                        hintDisplay.style.color = '#fbc02d';
+                        hintDisplay.style.opacity = '1';
+                    } else {
+                        hintDisplay.style.opacity = '0';
+                    }
+                }
+                setTimeout(() => { generateQuestion(); }, delay);
+            } else {
+                correctStreak = 0; // 答錯就斷連擊
+                wrongAttempts++; spawnLogic();
+
+                const hintDisplay = document.getElementById('hint-display');
+                if (wrongAttempts >= 3) {
+                    logQuestionRecord(currentQuestion.id, wrongAttempts, score);
+
+                    answerInput.value = currentQuestion.answer.trim();
+                    answerInput.style.color = '#1565C0'; answerInput.style.borderBottomColor = '#1976D2'; answerInput.style.backgroundColor = '#E3F2FD';
+                    answerInput.disabled = true; if(submitBtn) submitBtn.disabled = true;
+                    if (hintDisplay) { hintDisplay.innerText = "正確答案"; hintDisplay.style.color = '#1976D2'; hintDisplay.style.opacity = '1'; }
+                    setTimeout(() => { generateQuestion(); }, 3000);
+                } else {
+                    const correctAnswer = currentQuestion.answer.trim();
+                    const lowerPlayer = playerAnswer.toLowerCase(); const lowerCorrect = correctAnswer.toLowerCase();
+                    let hintText = ""; let matchCount = 0;
+                    
+                    for(let i = 0; i < correctAnswer.length; i++) {
+                        if (i < lowerPlayer.length && lowerPlayer[i] === lowerCorrect[i]) { hintText += correctAnswer[i]; matchCount++; } 
+                        else { hintText += "＿"; }
+                    }
+                    if (hintDisplay) {
+                        if (matchCount === 0 && correctAnswer.length > 0) { hintText = correctAnswer[0]; for (let i = 1; i < correctAnswer.length; i++) hintText += "＿"; } 
+                        hintDisplay.innerText = hintText; hintDisplay.style.opacity = '1';
+                    }
+                    
+                    answerInput.style.color = '#D32F2F'; answerInput.style.borderBottomColor = '#F44336'; answerInput.style.backgroundColor = '#FFEBEE';
+                    answerInput.style.transform = 'translateX(-8px)';
+                    setTimeout(() => answerInput.style.transform = 'translateX(8px)', 50);
+                    setTimeout(() => answerInput.style.transform = 'translateX(-8px)', 100);
+                    setTimeout(() => answerInput.style.transform = 'translateX(0)', 150);
+                    setTimeout(() => {
+                        answerInput.style.color = 'var(--blood-red)'; answerInput.style.borderBottomColor = 'var(--wood-light)';
+                        answerInput.style.backgroundColor = 'rgba(255, 255, 255, 0.7)'; answerInput.value = playerAnswer; answerInput.focus();
+                    }, 400);
+                }
+            }
+        }
+
+        function logQuestionRecord(questionId, wrongCount, currentScore) {
+            if (!currentStudent || !GAS_URL) return;
+            const url = `${GAS_URL}?action=log&class=${encodeURIComponent(currentStudent.class)}&num=${encodeURIComponent(currentStudent.num)}&q_index=${encodeURIComponent(questionId)}&wrong=${encodeURIComponent(wrongCount)}&score=${encodeURIComponent(currentScore)}`;
+            fetch(url).catch(e => console.log('紀錄傳送失敗:', e));
+        }
+        
+        function spawnLogic() {
+            let allyCount = entities.filter(e => e.team === 0 && e.state !== 'dead').length;
+            let enemySmallCount = entities.filter(e => e.team === 1 && !e.isBoss && e.state !== 'dead').length;
+            if (enemySmallCount <= allyCount) { // 限制敵軍小怪數量不會大於我方數量+1
+                let typeIndex = 0; if (wave >= 3 && allyCount > 3 && Math.random() > 0.5) typeIndex = 1; 
+                const enemyConfig = ENEMY_TYPES[typeIndex];
+                // 加大敵軍生成的 Y 軸隨機偏移 (正負 25)
+                let spawnY = (canvas.height * 0.75) + 15 + (Math.random() * 50 - 25);
+                let enemy = new Entity(canvas.width - 90, spawnY, 1, enemyConfig);
+                entities.push(enemy);
+            }
+        }
+
+        function initSummonButtons() {
+            summonSection.innerHTML = '';
+            let availableKeys = getAvailableClassKeys(wave);
+            const btnContainer = document.createElement('div');
+            btnContainer.style.display = 'flex'; btnContainer.style.gap = '15px'; btnContainer.style.justifyContent = 'center'; 
+
+            for (const key of availableKeys) {
+                const cls = CLASSES[key];
+                const btn = document.createElement('div');
+                btn.className = 'summon-btn'; btn.id = `summon-${key}`; btn.onclick = () => summonAlly(key);
+                let bgImage = spriteData[cls.classKey] ? `url('${spriteData[cls.classKey]}')` : 'none';
+
+                btn.innerHTML = `<div class="summon-icon" style="background-image:${bgImage};"></div><div class="summon-name">${cls.name}</div><div class="summon-cost">1 💎</div>`;
+                btnContainer.appendChild(btn);
+            }
+            summonSection.appendChild(btnContainer);
+
+            const manaDisplay = document.createElement('div'); manaDisplay.className = 'mana-container';
+            manaDisplay.innerHTML = `💎 魔石: <span id="mana-text" style="margin-left: 8px;">${mana}</span>`;
+            summonSection.appendChild(manaDisplay);
+            updateSummonButtonsUI();
+        }
+
+        function addMana(amount) { mana = Math.max(0, mana + amount); updateSummonButtonsUI(); }
+
+        function updateSummonButtonsUI() {
+            for (const [key, cls] of Object.entries(CLASSES)) {
+                const btn = document.getElementById(`summon-${key}`);
+                if (btn) { if (mana >= 1) btn.classList.remove('disabled'); else btn.classList.add('disabled'); }
+            }
+            const manaText = document.getElementById('mana-text');
+            if (manaText) manaText.innerText = mana;
+        }
+
+        function summonAlly(classKey) {
+            const cls = CLASSES[classKey];
+            if (mana >= 1) {
+                addMana(-1);
+                // 加大 Y 軸隨機偏移 (正負25)
+                let spawnY = (canvas.height * 0.75) + 15 + (Math.random() * 50 - 25); 
+                let ally = new Entity(90, spawnY, 0, cls); 
+                entities.push(ally); createParticleExplosion(ally.x, ally.y, '#3498db', 20);
+                const answerInput = document.getElementById('answer-input'); if (answerInput) answerInput.focus();
+            }
+        }
+        
+        function updateBossUI() {
+            if (!currentBoss || currentBoss.state === 'dead') { bossHpBarContainer.style.display = 'none'; return; }
+            bossHpBarContainer.style.display = 'block';
+            let hpPercent = Math.max(0, currentBoss.hp / currentBoss.maxHp);
+            bossHpFill.style.width = `${hpPercent * 100}%`;
+            bossHpText.innerText = `${Math.ceil(currentBoss.hp)} / ${Math.ceil(currentBoss.maxHp)}`;
+            bossNameDisplay.innerText = currentBoss.config.name;
+        }
+
+        function startWave() {
+            if (wave >= 1 && wave <= 5) currentBgKey = `bg${wave}`;
+            else { const bgKeys = ['bg1', 'bg2', 'bg3', 'bg4', 'bg5']; currentBgKey = bgKeys[Math.floor(Math.random() * bgKeys.length)]; }
+
+            isWaveClearing = false; isBossWave = (wave >= 2); bossTriggered = false;
+            mana = 0; updateSummonButtonsUI(); enemySpawnTimer = 0;
+            enemyBaseMaxHp = isBossWave ? 300 + (wave - 2) * 150 : 100; enemyBaseHp = enemyBaseMaxHp;
+            baseHp = baseMaxHp; hasTriggered80 = false; hasTriggered40 = false;
+        }
+
+        function triggerBossArrivalOrWin() {
+            if (isBossWave && !bossTriggered) {
+                bossTriggered = true; combatArea.style.backgroundColor = 'rgba(50, 0, 0, 0.8)'; bossWarning.classList.add('show');
+                setTimeout(() => { bossWarning.classList.remove('show'); if (!isWaveClearing && gameState === 'PLAYING') spawnBoss(); }, 3000);
+            } else if (!isBossWave) {
+                if (!isWaveClearing) triggerWaveClear();
+            }
+        }
+
+        function triggerWaveClear() {
+            if (isWaveClearing) return;
+            isWaveClearing = true; enemyBaseHp = 0; if (isBossWave) combatArea.style.backgroundColor = ''; 
+            
+            bgmAudio.pause(); victoryAudio.currentTime = 0; victoryAudio.play().catch(e => console.log('音效播放失敗:', e));
+            
+            entities.forEach(e => {
+                if(e.team === 1 && e.state !== 'dead') { createParticleExplosion(e.x, e.y, '#95a5a6', 10); e.hp = 0; e.state = 'dead'; }
+            });
+            setTimeout(() => { if(gameState === 'PLAYING') victoryScreen.classList.remove('hidden'); }, 1500);
+        }
+
+        function nextWave() { 
+            victoryScreen.classList.add('hidden'); wave++; 
+            victoryAudio.pause(); bgmAudio.play().catch(e => console.log('BGM播放失敗:', e));
+            playWaveTransition(); 
+        }
+
+        function playWaveTransition() {
+            const announcer = document.getElementById('wave-announcer');
+            mana = 0; initSummonButtons();
+            entities = []; particles = []; projectiles = []; effects = []; auras = [];
+            
+            announcer.innerText = `READY`; announcer.classList.add('show');
+            setTimeout(() => {
+                announcer.classList.remove('show');
+                setTimeout(() => {
+                    announcer.innerText = 'GO!'; announcer.style.color = '#4CAF50'; announcer.classList.add('show');
+                    setTimeout(() => {
+                        announcer.classList.remove('show'); announcer.style.color = 'var(--brass)'; startWave();
+                        setTimeout(() => {
+                            const answerInput = document.getElementById('answer-input'); if (answerInput) answerInput.focus();
+                        }, 100);
+                    }, 1000); 
+                }, 300);
+            }, 1000); 
+        }
+
+        function spawnBoss() {
+            let currentBossConfig = getBossConfig(wave); const bossY = (canvas.height * 0.75) + 15; 
+            currentBoss = new Entity(canvas.width - 120, bossY, 1, currentBossConfig);
+            entities.push(currentBoss); updateBossUI();
+            
+            entities.forEach(e => {
+                if (e.team === 0 && e.state !== 'dead') {
+                    e.x = Math.max(80, e.x - 200); e.stunTimer = 1500; createParticleExplosion(e.x, e.y, '#ffffff', 10);
+                }
+            });
+            canvas.style.transform = 'translate(10px, 10px)'; setTimeout(() => { canvas.style.transform = 'translate(-10px, -10px)'; }, 50);
+            setTimeout(() => { canvas.style.transform = 'translate(10px, -10px)'; }, 100); setTimeout(() => { canvas.style.transform = 'translate(0, 0)'; }, 150);
+        }
+
+        function startGame() {
+            if (questionBank.length === 0) return; 
+            bgmAudio.play().catch(e => console.log('BGM播放失敗:', e));
+            resizeCanvas(); startScreen.classList.add('hidden'); gameOverScreen.classList.add('hidden'); victoryScreen.classList.add('hidden');
+            bossHpBarContainer.style.display = 'none'; bossWarning.classList.remove('show'); combatArea.style.backgroundColor = '';
+            
+            CLASSES = JSON.parse(JSON.stringify(INITIAL_CLASSES));
+            gameState = 'PLAYING'; wave = 1; score = 0; mana = 0; baseHp = baseMaxHp; enemyBaseMaxHp = 100; enemyBaseHp = enemyBaseMaxHp;
+            isWaveClearing = false; hasTriggered80 = false; hasTriggered40 = false;
+            entities = []; particles = []; projectiles = []; effects = []; auras = [];
+            isBossWave = false; currentBoss = null; bossTriggered = false; enemySpawnTimer = 0;
+            correctStreak = 0; // 重設連擊數
+
+            initSummonButtons(); generateQuestion(); startWave();
+            lastTime = performance.now(); if(!animationId) loop(lastTime);
+        }
+
+        function gameOver() {
+            gameState = 'GAMEOVER'; bgmAudio.pause(); victoryAudio.pause();
+            endStats.innerText = `你守住了 ${wave - 1} 波\n本次答對 ${score} 題！`; 
+            gameOverScreen.classList.remove('hidden');
+            if (currentStudent) fetchLeaderboard('game-over-leaderboard-list');
+        }
+
+        function loop(timestamp) {
+            let deltaTime = timestamp - lastTime; if(deltaTime > 100) deltaTime = 100; lastTime = timestamp;
+            update(deltaTime); draw(); animationId = requestAnimationFrame(loop);
+        }
+
+        function update(deltaTime) {
+            if (gameState !== 'PLAYING') return;
+
+            // 敵方每60秒自動生成小怪 (1分鐘)
+            enemySpawnTimer += deltaTime;
+            if (enemySpawnTimer >= 60000) {
+                enemySpawnTimer = 0;
+                // spawnLogic 內已經自帶「敵軍數量 <= 我方數量」的判斷機制
+                if (!isWaveClearing) spawnLogic(); 
+            }
+
+            entities.forEach(e => e.update(deltaTime));
+            projectiles.forEach(p => p.update(deltaTime)); projectiles = projectiles.filter(p => p.active);
+            effects.forEach(e => e.update(deltaTime)); effects = effects.filter(e => e.life > 0);
+            auras.forEach(a => a.update(deltaTime)); auras = auras.filter(a => a.active); // 更新光圈
+            
+            if(Math.random() < 0.01) entities = entities.filter(e => e.state !== 'dead');
+
+            for (let i = particles.length - 1; i >= 0; i--) {
+                let p = particles[i]; p.x += p.vx; p.y += p.vy; p.life -= deltaTime * 0.002; 
+                if (p.life <= 0) particles.splice(i, 1);
+            }
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            const bgImg = loadedSprites[currentBgKey];
+            if (bgImg && bgImg.complete && bgImg.naturalWidth) ctx.drawImage(bgImg, 0, 0, canvas.width, canvas.height);
+
+            const groundY = canvas.height * 0.75;
+            const castleA = loadedSprites['castle_a'];
+            let myCastleY = groundY - 140; 
+            if (castleA && castleA.complete && castleA.naturalWidth) {
+                const drawW = 160; const drawH = drawW * (castleA.naturalHeight / castleA.naturalWidth);
+                myCastleY = groundY - drawH + 10; ctx.drawImage(castleA, -drawW/2, myCastleY, drawW, drawH);
+            }
+
+            const castleB = loadedSprites['castle_b'];
+            if (castleB && castleB.complete && castleB.naturalWidth) {
+                const drawW = 160; const drawH = drawW * (castleB.naturalHeight / castleB.naturalWidth);
+                ctx.drawImage(castleB, canvas.width - drawW/2, groundY - drawH + 10, drawW, drawH);
+            }
+
+            ctx.font = "bold 16px 'PMingLiU', '新細明體', serif"; ctx.textAlign = "center";
+            ctx.lineWidth = 4; ctx.strokeStyle = "#FFFFFF"; 
+            ctx.strokeText(Math.max(0, Math.ceil(baseHp)), 40, groundY + 30);
+            ctx.fillStyle = "#000000"; ctx.fillText(Math.max(0, Math.ceil(baseHp)), 40, groundY + 30);
+            
+            ctx.strokeText(Math.max(0, Math.ceil(enemyBaseHp)), canvas.width - 40, groundY + 30);
+            ctx.fillStyle = "#000000"; ctx.fillText(Math.max(0, Math.ceil(enemyBaseHp)), canvas.width - 40, groundY + 30);
+
+            let drawList = entities.filter(e => e.state !== 'dead').sort((a, b) => a.y - b.y);
+            drawList.forEach(e => e.draw(ctx));
+            
+            auras.forEach(a => a.draw(ctx)); // 繪製牧師光圈
+            
+            projectiles.forEach(p => p.draw(ctx)); effects.forEach(e => e.draw(ctx));
+
+            particles.forEach(p => {
+                ctx.fillStyle = p.color; ctx.globalAlpha = Math.max(0, p.life);
+                ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI*2); ctx.fill();
+            });
+            ctx.globalAlpha = 1.0;
+        }
+
+        if (GAS_URL && !GAS_URL.includes('請把複製的網址貼在引號裡面')) {
+            fetchLeaderboard('start-leaderboard-list');
+        }
+    </script>
+</body>
+</html>
