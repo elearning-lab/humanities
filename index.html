@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>知識戰鬥 RPG</title>
+    <title>填充行軍(六年級)</title>
     <style>
         /* === 中世紀旅館/冒險者公會 風格 (Tavern Theme) === */
         :root {
@@ -191,6 +191,23 @@
             border-bottom: 2px solid var(--wood-dark); margin: 0;
         }
 
+        /* 龍虎榜分頁按鈕樣式 */
+        .lb-tabs {
+            display: flex; background: var(--wood-dark); border-bottom: 2px solid var(--wood-light);
+            position: sticky; top: 0; z-index: 10;
+        }
+        .lb-tab {
+            flex: 1; padding: 8px 0; text-align: center; color: var(--parchment); cursor: pointer;
+            font-weight: bold; font-size: 1rem; background: var(--wood-light); border: none;
+            border-right: 1px solid var(--wood-dark); font-family: inherit; transition: all 0.2s;
+        }
+        .lb-tab:last-child { border-right: none; }
+        .lb-tab:hover { background: #795548; }
+        .lb-tab.active {
+            background: var(--parchment); color: var(--wood-dark);
+            border-bottom: 3px solid var(--blood-red);
+        }
+
         .hidden { display: none !important; }
 
         #boss-warning {
@@ -241,7 +258,7 @@
         </div>
 
         <div id="start-screen" class="overlay-screen">
-            <h1 style="margin-bottom: 10px; font-size: 3.5rem; text-align: center;">知識戰鬥 RPG</h1>
+            <h1 style="margin-bottom: 10px; font-size: 3.5rem; text-align: center;">填充行軍(六年級)</h1>
             <p style="margin-bottom: 20px; font-size: 20px; text-align: center; color: var(--parchment);">答對題目獲得魔石，召喚戰士抵禦敵人！</p>
             
             <div class="start-container">
@@ -278,6 +295,13 @@
                 <!-- 右側：獨立龍虎榜方框 -->
                 <div class="leaderboard-panel">
                     <div class="leaderboard-title">🏆 英雄龍虎榜 🏆</div>
+                    <div class="lb-tabs" id="start-lb-tabs">
+                        <button class="lb-tab active" onclick="switchLbTab('ALL', 'start-leaderboard-list', this)">全校</button>
+                        <button class="lb-tab" onclick="switchLbTab('6A', 'start-leaderboard-list', this)">6A</button>
+                        <button class="lb-tab" onclick="switchLbTab('6B', 'start-leaderboard-list', this)">6B</button>
+                        <button class="lb-tab" onclick="switchLbTab('6C', 'start-leaderboard-list', this)">6C</button>
+                        <button class="lb-tab" onclick="switchLbTab('6D', 'start-leaderboard-list', this)">6D</button>
+                    </div>
                     <div id="start-leaderboard-list" style="flex-grow: 1; overflow-y: auto;">
                         <div style="text-align: center; padding: 60px 20px; color: var(--wood-light); font-size: 1.1rem; font-weight: bold;">
                             📡 正在聯絡情報商...
@@ -291,9 +315,16 @@
             <h1 id="end-title">防線崩潰</h1>
             <p id="end-stats">你守住了 0 波，本次答對 0 題！</p>
             
-            <div style="background: var(--parchment); border-radius: 10px; width: 90%; max-width: 600px; max-height: 300px; overflow-y: auto; margin-bottom: 20px; border: 4px solid var(--wood-light);">
-                <div class="leaderboard-title" style="position: sticky; top: 0; z-index: 10;">🏆 最終結算排名 🏆</div>
-                <div id="game-over-leaderboard-list">
+            <div style="background: var(--parchment); border-radius: 10px; width: 90%; max-width: 600px; max-height: 320px; display: flex; flex-direction: column; overflow: hidden; margin-bottom: 20px; border: 4px solid var(--wood-light);">
+                <div class="leaderboard-title">🏆 最終結算排名 🏆</div>
+                <div class="lb-tabs" id="end-lb-tabs">
+                    <button class="lb-tab active" onclick="switchLbTab('ALL', 'game-over-leaderboard-list', this)">全校</button>
+                    <button class="lb-tab" onclick="switchLbTab('6A', 'game-over-leaderboard-list', this)">6A</button>
+                    <button class="lb-tab" onclick="switchLbTab('6B', 'game-over-leaderboard-list', this)">6B</button>
+                    <button class="lb-tab" onclick="switchLbTab('6C', 'game-over-leaderboard-list', this)">6C</button>
+                    <button class="lb-tab" onclick="switchLbTab('6D', 'game-over-leaderboard-list', this)">6D</button>
+                </div>
+                <div id="game-over-leaderboard-list" style="flex-grow: 1; overflow-y: auto;">
                     <div style="text-align: center; padding: 20px; color: var(--wood-dark); font-weight: bold;">正在結算並載入最新排名...</div>
                 </div>
             </div>
@@ -421,6 +452,7 @@
         let questionBank = []; 
         let currentQuestionIndex = 0;
         let currentStudent = null; 
+        let globalLeaderboardData = []; // 儲存從 GAS 取得的完整排行榜資料
 
         // 您的 GAS API URL
         const GAS_URL = 'https://script.google.com/macros/s/AKfycbyGmEpc0rCFuhpx6R6tWZ7Avrak055Jk8YWvWnsivxzWwNPqMOEOW6izX4GDQFsWUAcag/exec'; 
@@ -939,10 +971,20 @@
             } catch(e) { rankDisplay.innerHTML = `公會排名: 連線錯誤`; }
         }
 
-        async function fetchLeaderboard(targetId = 'start-leaderboard-list') {
+        // 記錄兩個排行榜目前停留的分頁狀態，供 Live Update 使用
+        let activeLbTabs = {
+            'start-leaderboard-list': 'ALL',
+            'game-over-leaderboard-list': 'ALL'
+        };
+
+        async function fetchLeaderboard(targetId = 'start-leaderboard-list', isSilent = false) {
             const lbContainer = document.getElementById(targetId);
             if (!lbContainer) return;
-            lbContainer.innerHTML = '<div style="text-align: center; padding: 40px 20px; color: #5c3a21; font-size: 1.1rem; font-weight: bold;">📜 正在聯絡情報商...</div>';
+            
+            // 如果是背景靜默更新 (Live Update)，就不顯示載入文字，避免畫面閃爍
+            if (!isSilent) {
+                lbContainer.innerHTML = '<div style="text-align: center; padding: 40px 20px; color: #5c3a21; font-size: 1.1rem; font-weight: bold;">📜 正在聯絡情報商...</div>';
+            }
 
             try {
                 let url = `${GAS_URL}?action=getLeaderboard`;
@@ -951,14 +993,84 @@
                 const response = await fetch(url);
                 const data = await response.json();
 
-                if (data.success && data.top15) renderLeaderboard(data.top15, data.myRank, data.myData, lbContainer);
-                else lbContainer.innerHTML = '<div style="text-align: center; color: #8b0000; padding: 20px; font-weight: bold;">無法取得公會情報。</div>';
+                if (data.success && (data.allData || data.top15)) {
+                    // 儲存完整榜單（若舊版 GAS 尚未更新則退回使用 top15）
+                    globalLeaderboardData = data.allData || data.top15;
+                    
+                    if (!isSilent) {
+                        // 只有在初次載入時，才重設該區塊的分頁按鈕為「全校」active
+                        activeLbTabs[targetId] = 'ALL';
+                        const tabsContainerId = (targetId === 'start-leaderboard-list') ? 'start-lb-tabs' : 'end-lb-tabs';
+                        const tabsContainer = document.getElementById(tabsContainerId);
+                        if (tabsContainer) {
+                            const tabs = tabsContainer.querySelectorAll('.lb-tab');
+                            tabs.forEach((t, idx) => {
+                                if (idx === 0) t.classList.add('active');
+                                else t.classList.remove('active');
+                            });
+                        }
+                    }
+                    
+                    // 根據目前停留的分頁 (例如正在看 6A) 進行無縫刷新
+                    const currentFilter = activeLbTabs[targetId] || 'ALL';
+                    filterAndRenderLeaderboard(currentFilter, lbContainer);
+                } else if (!isSilent) {
+                    lbContainer.innerHTML = '<div style="text-align: center; color: #8b0000; padding: 20px; font-weight: bold;">無法取得公會情報。</div>';
+                }
             } catch (err) {
-                lbContainer.innerHTML = '<div style="text-align: center; color: #8b0000; padding: 20px; font-weight: bold;">連線逾時，榜單載入失敗。</div>';
+                if (!isSilent) {
+                    lbContainer.innerHTML = '<div style="text-align: center; color: #8b0000; padding: 20px; font-weight: bold;">連線逾時，榜單載入失敗。</div>';
+                }
             }
         }
 
-        function renderLeaderboard(top15, myRank, myData, container) {
+        function switchLbTab(filterClass, targetId, btnElement) {
+            activeLbTabs[targetId] = filterClass; // 記錄使用者切換到了哪個分頁
+            if (btnElement && btnElement.parentElement) {
+                const tabs = btnElement.parentElement.querySelectorAll('.lb-tab');
+                tabs.forEach(t => t.classList.remove('active'));
+                btnElement.classList.add('active');
+            }
+            const lbContainer = document.getElementById(targetId);
+            if (lbContainer) {
+                filterAndRenderLeaderboard(filterClass, lbContainer);
+            }
+        }
+
+        function filterAndRenderLeaderboard(filterClass, container) {
+            if (!globalLeaderboardData || globalLeaderboardData.length === 0) {
+                container.innerHTML = '<div style="text-align: center; color: #5c3a21; padding: 30px; font-weight: bold;">目前尚無紀錄</div>';
+                return;
+            }
+
+            // 根據選擇的班別篩選資料
+            let filtered = (filterClass === 'ALL') 
+                ? globalLeaderboardData 
+                : globalLeaderboardData.filter(p => p.cls.toUpperCase() === filterClass.toUpperCase());
+
+            if (filtered.length === 0) {
+                container.innerHTML = `<div style="text-align: center; color: #5c3a21; padding: 30px; font-weight: bold;">${filterClass} 班目前尚無討伐紀錄</div>`;
+                return;
+            }
+
+            let top15 = filtered.slice(0, 15);
+            let myRank = -1;
+            let myData = null;
+
+            if (currentStudent) {
+                for (let i = 0; i < filtered.length; i++) {
+                    if (filtered[i].cls === String(currentStudent.class).trim() && filtered[i].num === String(currentStudent.num).trim()) {
+                        myRank = i + 1;
+                        myData = filtered[i];
+                        break;
+                    }
+                }
+            }
+
+            renderLeaderboard(top15, myRank, myData, container, filterClass);
+        }
+
+        function renderLeaderboard(top15, myRank, myData, container, filterClass = 'ALL') {
             let html = `
             <table style="width: 100%; border-collapse: collapse; text-align: center; font-weight: bold; font-size: 1rem;">
                 <thead style="background: #5c3a21; color: #f4e4bc; position: sticky; top: 0; z-index: 5;">
@@ -987,7 +1099,7 @@
                         <td style="padding: 10px;">${myData.name}</td><td style="padding: 10px; color: #fdf5e6;">${myData.score}</td>
                     </tr>
                 `;
-            } else if (myRank === -1 && currentStudent) {
+            } else if (myRank === -1 && currentStudent && (filterClass === 'ALL' || filterClass === currentStudent.class)) {
                 html += `
                     <tr style="background: rgba(0,0,0,0.1); color: #8b5a2b; border-top: 3px solid #a1887f;">
                         <td style="padding: 10px;">-</td><td style="padding: 10px;">${currentStudent.class}</td>
@@ -1393,6 +1505,17 @@
 
         if (GAS_URL && !GAS_URL.includes('請把複製的網址貼在引號裡面')) {
             fetchLeaderboard('start-leaderboard-list');
+            
+            // 啟動龍虎榜 Live Update (每 10 秒在背景靜默更新一次)
+            setInterval(() => {
+                if (gameState === 'START') {
+                    fetchLeaderboard('start-leaderboard-list', true);
+                    // 如果學生已經登入但還沒按「開始戰鬥」，也同步更新他畫面上的個人目前排名
+                    if (currentStudent) fetchMyRank();
+                } else if (gameState === 'GAMEOVER') {
+                    fetchLeaderboard('game-over-leaderboard-list', true);
+                }
+            }, 10000);
         }
     </script>
 </body>
